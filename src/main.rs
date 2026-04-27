@@ -1,6 +1,8 @@
 mod db_loader;
+mod query_6;
+// use mongodb::bson::doc;
 
-static CONN_STRING: &str = include_str!("../.mongostr");
+static CONN_STRING: &str = "mongodb://string";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -9,7 +11,16 @@ async fn main() {
     .await
     .unwrap()
     .database("tweets")
-    .collection("main-collection");
-  let total = db_loader::load_json_files(coll, "data").await.unwrap();
-  println!("Inserted {total} documents");
+    .collection("tweets");
+
+  // let count = coll.count_documents(doc! {}).await.expect("count failed");
+  // println!("Total documents in collection: {}", count);
+
+  // let total = db_loader::load_json_files(coll, "data").await.unwrap();
+  // println!("Inserted {total} documents");
+
+  let user_tweet_dists = query_6::get(&coll).await;
+  for r in user_tweet_dists.iter().take(5) {
+    println!("{:?}", r);
+  }
 }
