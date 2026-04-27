@@ -28,7 +28,7 @@ pub async fn get(collection: &Collection<Document>) -> Vec<UserTweetDist> {
         // group - group the tweets by username and count up totals
         "$group": {
             "_id": "$user.screen_name",
-            "total": { "$sum": 1 },
+            "total_tweets": { "$sum": 1 },
             // create counter variables for each category; for each tweet
             // add 1 to the counter if the tweet fits that category
             // simple-tweet is signified by the absence of all other flags
@@ -49,10 +49,10 @@ pub async fn get(collection: &Collection<Document>) -> Vec<UserTweetDist> {
             "screen_name": "$_id",
             "total_tweets": 1,
             // calculate the percent for each tweet category
-            "simple_tweet_percent": { "$multiply": [{ "$divide": ["$simple_tweet_count", "$total"] }, 100] },
-            "reply_percent": { "$multiply": [{ "$divide": ["$reply_count", "$total"] }, 100] },
-            "retweet_percent": { "$multiply": [{ "$divide": ["$retweet_count", "$total"] }, 100] },
-            "quote_percent": { "$multiply": [{ "$divide": ["$quote_count", "$total"] }, 100] }
+            "simple_tweet_percent": { "$multiply": [{ "$divide": ["$simple_tweet_count", "$total_tweets"] }, 100] },
+            "reply_percent": { "$multiply": [{ "$divide": ["$reply_count", "$total_tweets"] }, 100] },
+            "retweet_percent": { "$multiply": [{ "$divide": ["$retweet_count", "$total_tweets"] }, 100] },
+            "quote_percent": { "$multiply": [{ "$divide": ["$quote_count", "$total_tweets"] }, 100] }
         }
     },
   ];
