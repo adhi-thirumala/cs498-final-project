@@ -1,5 +1,6 @@
 mod db_loader;
-mod query_6;
+mod tweets_per_hashtag;
+mod user_tweet_dist;
 // use mongodb::bson::doc;
 
 static CONN_STRING: &str = "mongodb://string";
@@ -19,8 +20,11 @@ async fn main() {
   // let total = db_loader::load_json_files(coll, "data").await.unwrap();
   // println!("Inserted {total} documents");
 
-  let user_tweet_dists = query_6::get(&coll).await;
-  for r in user_tweet_dists.iter().take(5) {
+  let results = tweets_per_hashtag::get(&coll).await;
+
+  println!("Collected {:?} results", results.len());
+
+  for r in results.iter().take(5) {
     println!("{:?}", r);
   }
 }

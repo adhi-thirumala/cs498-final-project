@@ -4,6 +4,7 @@ use mongodb::bson::{Document, doc};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct UserTweetDist {
   screen_name: String,
   total_tweets: i64,
@@ -46,6 +47,7 @@ pub async fn get(collection: &Collection<Document>) -> Vec<UserTweetDist> {
         // project - do the math to put the counted data into the desired format
         "$project": {
             // include the username and the total number of tweets they made
+            "_id": 0,
             "screen_name": "$_id",
             "total_tweets": 1,
             // calculate the percent for each tweet category
