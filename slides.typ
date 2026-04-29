@@ -8,7 +8,7 @@
     subtitle: [Querying 6.7 GB of Eurovision tweets in MongoDB],
     author: [Adhi Thirumala #sym.dot.c Quinten Schafer #sym.dot.c Ashley Li],
     date: datetime.today(),
-    institution: [CS498 DCU #sym.dash.em Final Project],
+    institution: [CS498 DCU - Final Project],
   ),
 )
 
@@ -84,7 +84,7 @@ Raw NDJSON loaded straight into Mongo. Fields not used by any query elided.
 = The Six Queries
 // ===========================================================================
 
-== Top User #sym.dash.em `user_with_most_tweets.rs`
+== Top User - `user_with_most_tweets.rs`
 
 Filter to docs with a string `screen_name`, count by author, take the leader.
 
@@ -97,7 +97,7 @@ Filter to docs with a string `screen_name`, count by author, take the leader.
 `$sortByCount` is sugar for `$group + $sort`: each distinct value paired with
 its document count, sorted descending.
 
-== Top Country #sym.dash.em `country_with_most_tweets.rs`
+== Top Country - `country_with_most_tweets.rs`
 
 Same shape as the top-user query, but pivots on `place.country`.
 
@@ -109,7 +109,7 @@ Same shape as the top-user query, but pivots on `place.country`.
 
 The `$type: "string"` guard skips tweets with no `place` (most of them).
 
-== Tweets per Hashtag #sym.dash.em `tweets_per_hashtag.rs`
+== Tweets per Hashtag - `tweets_per_hashtag.rs`
 
 `$unwind` explodes the hashtag array; `$group` lower-cases and counts.
 
@@ -119,7 +119,7 @@ The `$type: "string"` guard skips tweets with no `place` (most of them).
   block: true,
 )]
 
-== Replies by `@blcklcfr` #sym.dash.em `replies_by_blcklcfr.rs`
+== Replies by `@blcklcfr` - `replies_by_blcklcfr.rs`
 
 Pin `screen_name`, require a non-null `in_reply_to_status_id`, flatten output.
 
@@ -129,7 +129,7 @@ Pin `screen_name`, require a non-null `in_reply_to_status_id`, flatten output.
   block: true,
 )]
 
-== Verified Tweet Mix #sym.dash.em `$match + $group`
+== Verified Tweet Mix - `$match + $group`
 
 Filter to verified users, group by author, count each tweet category.
 
@@ -142,7 +142,7 @@ Filter to verified users, group by author, count each tweet category.
 A "simple" tweet is the absence of every other flag. Retweets are detected
 via `$type ... "missing"` on `retweeted_status`.
 
-== Verified Tweet Mix #sym.dash.em `$project`
+== Verified Tweet Mix - `$project`
 
 Each counter divided by `total_tweets` gives the percentage breakdown.
 
@@ -152,7 +152,7 @@ Each counter divided by `total_tweets` gives the percentage breakdown.
   block: true,
 )]
 
-== Mutual-Reply Triangles (1/2) #sym.dash.em build edges
+== Mutual-Reply Triangles (1/2) - build edges
 
 Collapse every reply into a deduplicated directed edge `(from, to)`.
 
@@ -164,7 +164,7 @@ Collapse every reply into a deduplicated directed edge `(from, to)`.
 
 Triangle detection itself happens in Rust over the returned graph.
 
-== Mutual-Reply Triangles (2/2) #sym.dash.em hydrate users
+== Mutual-Reply Triangles (2/2) - hydrate users
 
 Pull every screen name in a triangle; `$group` keeps one profile per author.
 
@@ -213,10 +213,10 @@ Pull every screen name in a triangle; `$group` keeps one profile per author.
 
 - Managing a database at this scale by hand is its own project.
 - The newest `mongod` shipped a bundled `tcmalloc` that refused to start on
-  our VM #sym.dash.em a libc-related flag in `mongod.conf` was needed before
+  our VM - a libc-related flag in `mongod.conf` was needed before
   it would even boot.
 - A single node was already painful; a real deployment also needs replica
-  sets, backups, and failover #sym.dash.em each one its own rabbit hole.
+  sets, backups, and failover - each one its own rabbit hole.
 - *Takeaway:* unless ops is the point, use Atlas (or any managed service).
   Self-hosting Mongo is needlessly complicated for a class project.
 
