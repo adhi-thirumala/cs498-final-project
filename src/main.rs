@@ -6,7 +6,11 @@ mod tweets_per_hashtag;
 mod user_tweet_dist;
 mod user_with_most_tweets;
 
-use std::{error::Error, io::Stdout, time::Duration};
+use std::{
+  error::Error,
+  io::Stdout,
+  time::{Duration, Instant},
+};
 
 use crossterm::{
   event::{self, Event, KeyCode, KeyEventKind},
@@ -26,8 +30,7 @@ use ratatui::{
   },
 };
 
-static CONN_STRING: &str =
-  "mongodb://adminUser:ilovedalegend@34.70.144.165:46767/?authSource=admin";
+static CONN_STRING: &str = include_str!("../.mongostr");
 const QUERY_LABELS: [&str; 6] = [
   "Triangles",
   "Tweets / Hashtag",
@@ -53,6 +56,7 @@ struct App {
   selected_query: usize,
   offset: usize,
   triangle_index: usize,
+  started_at: Instant,
   data: QueryData,
 }
 
@@ -62,6 +66,7 @@ impl App {
       selected_query: 0,
       offset: 0,
       triangle_index: 0,
+      started_at: Instant::now(),
       data,
     }
   }
@@ -121,7 +126,7 @@ impl App {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-  let conn_string = std::env::var("MONGODB_URI").unwrap_or_else(|_| CONN_STRING.to_string());
+  let conn_string = CONN_STRING.trim();
   let coll = db_loader::connect(&conn_string)
     .await?
     .database("tweets")
@@ -180,7 +185,7 @@ fn run_app(terminal: &mut AppTerminal, mut app: App) -> Result<(), Box<dyn Error
   loop {
     terminal.draw(|frame| render(frame, &app))?;
 
-    if !event::poll(Duration::from_millis(200))? {
+    if !event::poll(Duration::from_millis(50))? {
       continue;
     }
 
@@ -447,10 +452,10 @@ fn render_metric(frame: &mut Frame<'_>, area: Rect, title: &str, lines: Vec<Line
 
 fn render_triangles(frame: &mut Frame<'_>, area: Rect, app: &App) {
   let title = if app.data.triangles.is_empty() {
-    "Triangles".to_string()
+    "3D Triangles".to_string()
   } else {
     format!(
-      "Triangles {}/{}",
+      "3D Triangles {}/{}",
       app.triangle_index + 1,
       app.data.triangles.len()
     )
@@ -469,59 +474,23 @@ fn render_triangles(frame: &mut Frame<'_>, area: Rect, app: &App) {
     return;
   };
 
-  if inner.width < 76 || inner.height < 24 {
+  if inner.width < 56 || inner.height < 18 {
     render_triangle_text_fallback(frame, inner, triple);
     return;
   }
 
-  let node_width = 42.min((inner.width.saturating_sub(8)) / 2).max(28);
-  let node_height = 10;
-  let top = Rect::new(
-    inner.x + (inner.width - node_width) / 2,
-    inner.y + 1,
-    node_width,
-    node_height,
-  );
-  let left = Rect::new(
-    inner.x + 2,
-    inner.y + inner.height - node_height - 1,
-    node_width,
-    node_height,
-  );
-  let right = Rect::new(
-    inner.x + inner.width - node_width - 2,
-    inner.y + inner.height - node_height - 1,
-    node_width,
-    node_height,
-  );
+  let sections = Layout::default()
+    .direction(Direction::Vertical)
+    .constraints([Constraint::Min(12), Constraint::Length(6)])
+    .split(inner);
 
-  let line_style = Style::default().fg(Color::DarkGray);
-  draw_line(
-    frame.buffer_mut(),
-    inner,
-    (top.x + top.width / 2, top.y + top.height),
-    (left.x + left.width / 2, left.y.saturating_sub(1)),
-    line_style,
+  render_triangle_scene(
+    frame,
+    sections[0],
+    app.started_at.elapsed().as_secs_f32(),
+    triple,
   );
-  draw_line(
-    frame.buffer_mut(),
-    inner,
-    (top.x + top.width / 2, top.y + top.height),
-    (right.x + right.width / 2, right.y.saturating_sub(1)),
-    line_style,
-  );
-  draw_horizontal(
-    frame.buffer_mut(),
-    inner,
-    left.x + left.width,
-    right.x.saturating_sub(1),
-    left.y + left.height / 2,
-    line_style,
-  );
-
-  render_user_node(frame, top, "A", &triple.a, Color::Red);
-  render_user_node(frame, left, "B", &triple.b, Color::Yellow);
-  render_user_node(frame, right, "C", &triple.c, Color::Blue);
+  render_triangle_legend(frame, sections[1], triple);
 }
 
 fn render_triangle_text_fallback(frame: &mut Frame<'_>, area: Rect, triple: &triangle::Triple) {
@@ -543,25 +512,344 @@ fn render_triangle_text_fallback(frame: &mut Frame<'_>, area: Rect, triple: &tri
   );
 }
 
-fn render_user_node(
+#[derive(Clone, Copy)]
+struct Vec3 {
+  x: f32,
+  y: f32,
+  z: f32,
+}
+
+#[derive(Clone, Copy)]
+struct ProjectedPoint {
+  x: u16,
+  y: u16,
+  depth: f32,
+}
+
+fn render_triangle_scene(
   frame: &mut Frame<'_>,
   area: Rect,
+  seconds: f32,
+  triple: &triangle::Triple,
+) {
+  let block = panel_block("Rotating Wireframe");
+  let scene = block.inner(area);
+  frame.render_widget(block, area);
+
+  if scene.width < 10 || scene.height < 8 {
+    return;
+  }
+
+  let angle = seconds * 0.9;
+  let front = [
+    Vec3 {
+      x: 0.0,
+      y: -1.1,
+      z: -0.28,
+    },
+    Vec3 {
+      x: -1.45,
+      y: 0.95,
+      z: -0.28,
+    },
+    Vec3 {
+      x: 1.45,
+      y: 0.95,
+      z: -0.28,
+    },
+  ];
+  let back = front.map(|point| Vec3 { z: 0.34, ..point });
+  let vertices = [
+    ("A", &triple.a, Color::Red, 0.0),
+    ("B", &triple.b, Color::Yellow, 1.7),
+    ("C", &triple.c, Color::Blue, 3.4),
+  ];
+
+  let buf = frame.buffer_mut();
+  draw_triangle_prism(buf, scene, front, back, angle);
+
+  for (index, (label, user, color, phase)) in vertices.into_iter().enumerate() {
+    draw_vertex_cube(buf, scene, front[index], angle, color, phase);
+    if let Some(point) = project_point(rotate_scene(front[index], angle), scene) {
+      draw_vertex_label(buf, scene, point, label, user, color);
+    }
+  }
+
+  draw_text(
+    buf,
+    scene,
+    scene.x.saturating_add(1),
+    scene.y,
+    "h/l cycles triangles; q quits",
+    Style::default().fg(Color::DarkGray),
+  );
+}
+
+fn render_triangle_legend(frame: &mut Frame<'_>, area: Rect, triple: &triangle::Triple) {
+  let rows = [
+    ("A", &triple.a, Color::Red),
+    ("B", &triple.b, Color::Yellow),
+    ("C", &triple.c, Color::Blue),
+  ];
+  let lines = rows
+    .into_iter()
+    .map(|(label, user, color)| {
+      Line::from(vec![
+        Span::styled(
+          format!("{label} "),
+          Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+          format!("@{}", user.screen_name),
+          Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!(
+          " | {} | {} followers | verified: {}",
+          clean_text(if user.name.is_empty() {
+            "unknown"
+          } else {
+            &user.name
+          }),
+          count_text(user.followers_count),
+          verified_text(user.verified),
+        )),
+      ])
+    })
+    .collect::<Vec<_>>();
+
+  frame.render_widget(
+    Paragraph::new(lines)
+      .alignment(Alignment::Center)
+      .block(panel_block("Vertex Users"))
+      .wrap(Wrap { trim: true }),
+    area,
+  );
+}
+
+fn draw_triangle_prism(
+  buf: &mut Buffer,
+  clip: Rect,
+  front: [Vec3; 3],
+  back: [Vec3; 3],
+  angle: f32,
+) {
+  let front = front.map(|point| project_point(rotate_scene(point, angle), clip));
+  let back = back.map(|point| project_point(rotate_scene(point, angle), clip));
+  let edges = [(0, 1), (1, 2), (2, 0)];
+  let back_style = Style::default().fg(Color::DarkGray);
+  let connector_style = Style::default().fg(Color::Gray);
+  let front_style = Style::default()
+    .fg(Color::Cyan)
+    .add_modifier(Modifier::BOLD);
+
+  for (from, to) in edges {
+    draw_projected_line(buf, clip, back[from], back[to], back_style);
+  }
+
+  for index in 0..3 {
+    draw_projected_line(buf, clip, back[index], front[index], connector_style);
+  }
+
+  for (from, to) in edges {
+    draw_projected_line(buf, clip, front[from], front[to], front_style);
+  }
+}
+
+fn draw_vertex_cube(
+  buf: &mut Buffer,
+  clip: Rect,
+  center: Vec3,
+  angle: f32,
+  color: Color,
+  phase: f32,
+) {
+  let half = 0.18;
+  let offsets = [
+    Vec3 {
+      x: -half,
+      y: -half,
+      z: -half,
+    },
+    Vec3 {
+      x: half,
+      y: -half,
+      z: -half,
+    },
+    Vec3 {
+      x: half,
+      y: half,
+      z: -half,
+    },
+    Vec3 {
+      x: -half,
+      y: half,
+      z: -half,
+    },
+    Vec3 {
+      x: -half,
+      y: -half,
+      z: half,
+    },
+    Vec3 {
+      x: half,
+      y: -half,
+      z: half,
+    },
+    Vec3 {
+      x: half,
+      y: half,
+      z: half,
+    },
+    Vec3 {
+      x: -half,
+      y: half,
+      z: half,
+    },
+  ];
+  let points = offsets.map(|offset| {
+    let spun = rotate_xyz(
+      offset,
+      angle * 1.8 + phase,
+      angle * 1.3 + phase,
+      angle * 1.5,
+    );
+    project_point(rotate_scene(add_vec3(center, spun), angle), clip)
+  });
+  let edges = [
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 0),
+    (4, 5),
+    (5, 6),
+    (6, 7),
+    (7, 4),
+    (0, 4),
+    (1, 5),
+    (2, 6),
+    (3, 7),
+  ];
+  let close_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
+  let far_style = Style::default().fg(Color::DarkGray);
+
+  for (from, to) in edges {
+    let style = match (points[from], points[to]) {
+      (Some(from), Some(to)) if (from.depth + to.depth) / 2.0 > 0.25 => far_style,
+      _ => close_style,
+    };
+    draw_projected_line(buf, clip, points[from], points[to], style);
+  }
+
+  for point in points.into_iter().flatten() {
+    let style = if point.depth > 0.25 {
+      far_style
+    } else {
+      close_style
+    };
+    draw_symbol(buf, clip, point.x, point.y, "■", style);
+  }
+}
+
+fn draw_projected_line(
+  buf: &mut Buffer,
+  clip: Rect,
+  from: Option<ProjectedPoint>,
+  to: Option<ProjectedPoint>,
+  style: Style,
+) {
+  if let (Some(from), Some(to)) = (from, to) {
+    draw_line(buf, clip, (from.x, from.y), (to.x, to.y), style);
+  }
+}
+
+fn draw_vertex_label(
+  buf: &mut Buffer,
+  clip: Rect,
+  point: ProjectedPoint,
   label: &str,
   user: &triangle::User,
   color: Color,
 ) {
-  let mut lines = vec![Line::from(Span::styled(
-    format!("@{}", user.screen_name),
-    Style::default().add_modifier(Modifier::BOLD),
-  ))];
-  lines.extend(user_detail_lines(user).into_iter().take(7));
-  frame.render_widget(
-    Paragraph::new(lines)
-      .alignment(Alignment::Center)
-      .block(panel_block(label).border_style(Style::default().fg(color)))
-      .wrap(Wrap { trim: true }),
-    area,
+  let text = format!("{label} @{}", user.screen_name);
+  let width = u16::try_from(text.chars().count()).unwrap_or(u16::MAX);
+  let right_edge = clip.x.saturating_add(clip.width);
+  let x = if point.x.saturating_add(width).saturating_add(2) < right_edge {
+    point.x.saturating_add(2)
+  } else {
+    point.x.saturating_sub(width.saturating_add(2))
+  };
+  let y = if point.y > clip.y.saturating_add(1) {
+    point.y - 1
+  } else {
+    point.y.saturating_add(1)
+  };
+
+  draw_text(
+    buf,
+    clip,
+    x,
+    y,
+    &text,
+    Style::default().fg(color).add_modifier(Modifier::BOLD),
   );
+}
+
+fn project_point(point: Vec3, area: Rect) -> Option<ProjectedPoint> {
+  let distance = 4.4;
+  let depth = distance + point.z;
+  if depth <= 0.1 || area.width == 0 || area.height == 0 {
+    return None;
+  }
+
+  let perspective = distance / depth;
+  let center_x = f32::from(area.x) + f32::from(area.width) / 2.0;
+  let center_y = f32::from(area.y) + f32::from(area.height) / 2.0;
+  let x = center_x + point.x * f32::from(area.width) / 4.7 * perspective;
+  let y = center_y + point.y * f32::from(area.height) / 3.0 * perspective;
+
+  if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
+    return None;
+  }
+
+  Some(ProjectedPoint {
+    x: x.round().min(f32::from(u16::MAX)) as u16,
+    y: y.round().min(f32::from(u16::MAX)) as u16,
+    depth: point.z,
+  })
+}
+
+fn rotate_scene(point: Vec3, angle: f32) -> Vec3 {
+  rotate_xyz(point, angle * 0.55 + 0.45, angle * 0.8, angle * 0.25)
+}
+
+fn rotate_xyz(point: Vec3, x_angle: f32, y_angle: f32, z_angle: f32) -> Vec3 {
+  let (sin_x, cos_x) = x_angle.sin_cos();
+  let (sin_y, cos_y) = y_angle.sin_cos();
+  let (sin_z, cos_z) = z_angle.sin_cos();
+
+  let point = Vec3 {
+    x: point.x * cos_y + point.z * sin_y,
+    y: point.y,
+    z: -point.x * sin_y + point.z * cos_y,
+  };
+  let point = Vec3 {
+    x: point.x,
+    y: point.y * cos_x - point.z * sin_x,
+    z: point.y * sin_x + point.z * cos_x,
+  };
+  Vec3 {
+    x: point.x * cos_z - point.y * sin_z,
+    y: point.x * sin_z + point.y * cos_z,
+    z: point.z,
+  }
+}
+
+fn add_vec3(left: Vec3, right: Vec3) -> Vec3 {
+  Vec3 {
+    x: left.x + right.x,
+    y: left.y + right.y,
+    z: left.z + right.z,
+  }
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect) {
@@ -574,13 +862,6 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect) {
     .block(panel_block("Keys").border_style(Style::default().fg(Color::Cyan))),
     area,
   );
-}
-
-fn draw_horizontal(buf: &mut Buffer, clip: Rect, x1: u16, x2: u16, y: u16, style: Style) {
-  let (start, end) = if x1 <= x2 { (x1, x2) } else { (x2, x1) };
-  for x in start..=end {
-    draw_symbol(buf, clip, x, y, "─", style);
-  }
 }
 
 fn draw_line(buf: &mut Buffer, clip: Rect, from: (u16, u16), to: (u16, u16), style: Style) {
@@ -624,6 +905,19 @@ fn draw_line(buf: &mut Buffer, clip: Rect, from: (u16, u16), to: (u16, u16), sty
   }
 }
 
+fn draw_text(buf: &mut Buffer, clip: Rect, x: u16, y: u16, text: &str, style: Style) {
+  for (offset, character) in text.chars().enumerate() {
+    let Ok(offset) = u16::try_from(offset) else {
+      break;
+    };
+    let Some(cell_x) = x.checked_add(offset) else {
+      break;
+    };
+    let symbol = character.to_string();
+    draw_symbol(buf, clip, cell_x, y, &symbol, style);
+  }
+}
+
 fn draw_symbol(buf: &mut Buffer, clip: Rect, x: u16, y: u16, symbol: &str, style: Style) {
   if x < clip.x
     || x >= clip.x.saturating_add(clip.width)
@@ -644,7 +938,7 @@ fn panel_block<'a>(title: impl Into<Line<'a>>) -> Block<'a> {
 }
 
 fn table_header<const N: usize>(labels: [&'static str; N]) -> Row<'static> {
-    Row::new(labels).style(
+  Row::new(labels).style(
     Style::default()
       .fg(Color::Green)
       .add_modifier(Modifier::BOLD),
