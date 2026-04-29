@@ -6,12 +6,12 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct UserTweetDist {
-  screen_name: String,
-  total_tweets: i64,
-  simple_tweet_percent: f64,
-  reply_percent: f64,
-  retweet_percent: f64,
-  quote_percent: f64,
+  pub screen_name: String,
+  pub total_tweets: i64,
+  pub simple_tweet_percent: f64,
+  pub reply_percent: f64,
+  pub retweet_percent: f64,
+  pub quote_percent: f64,
 }
 
 pub async fn get(collection: &Collection<Document>) -> Vec<UserTweetDist> {

@@ -6,8 +6,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct HashtagCount {
-  hashtag: String,
-  count: i64,
+  pub hashtag: String,
+  pub count: i64,
 }
 
 pub async fn get(collection: &Collection<Document>) -> Vec<HashtagCount> {

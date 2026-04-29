@@ -2,3 +2,5 @@
 data
 .mongostr
 /.dbconfig
+/.env
+/output.pdf
