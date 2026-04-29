@@ -541,24 +541,23 @@ fn render_triangle_scene(
   }
 
   let angle = seconds * 0.9;
-  let front = [
+  let triangle = [
     Vec3 {
       x: 0.0,
       y: -1.1,
-      z: -0.28,
+      z: 0.0,
     },
     Vec3 {
       x: -1.45,
       y: 0.95,
-      z: -0.28,
+      z: 0.0,
     },
     Vec3 {
       x: 1.45,
       y: 0.95,
-      z: -0.28,
+      z: 0.0,
     },
   ];
-  let back = front.map(|point| Vec3 { z: 0.34, ..point });
   let vertices = [
     ("A", &triple.a, Color::Red, 0.0),
     ("B", &triple.b, Color::Yellow, 1.7),
@@ -566,11 +565,11 @@ fn render_triangle_scene(
   ];
 
   let buf = frame.buffer_mut();
-  draw_triangle_prism(buf, scene, front, back, angle);
+  draw_rotating_triangle(buf, scene, triangle, angle);
 
   for (index, (label, user, color, phase)) in vertices.into_iter().enumerate() {
-    draw_vertex_cube(buf, scene, front[index], angle, color, phase);
-    if let Some(point) = project_point(rotate_scene(front[index], angle), scene) {
+    draw_vertex_cube(buf, scene, triangle[index], angle, color, phase);
+    if let Some(point) = project_point(rotate_scene(triangle[index], angle), scene) {
       draw_vertex_label(buf, scene, point, label, user, color);
     }
   }
@@ -626,32 +625,15 @@ fn render_triangle_legend(frame: &mut Frame<'_>, area: Rect, triple: &triangle::
   );
 }
 
-fn draw_triangle_prism(
-  buf: &mut Buffer,
-  clip: Rect,
-  front: [Vec3; 3],
-  back: [Vec3; 3],
-  angle: f32,
-) {
-  let front = front.map(|point| project_point(rotate_scene(point, angle), clip));
-  let back = back.map(|point| project_point(rotate_scene(point, angle), clip));
+fn draw_rotating_triangle(buf: &mut Buffer, clip: Rect, triangle: [Vec3; 3], angle: f32) {
+  let points = triangle.map(|point| project_point(rotate_scene(point, angle), clip));
   let edges = [(0, 1), (1, 2), (2, 0)];
-  let back_style = Style::default().fg(Color::DarkGray);
-  let connector_style = Style::default().fg(Color::Gray);
-  let front_style = Style::default()
+  let style = Style::default()
     .fg(Color::Cyan)
     .add_modifier(Modifier::BOLD);
 
   for (from, to) in edges {
-    draw_projected_line(buf, clip, back[from], back[to], back_style);
-  }
-
-  for index in 0..3 {
-    draw_projected_line(buf, clip, back[index], front[index], connector_style);
-  }
-
-  for (from, to) in edges {
-    draw_projected_line(buf, clip, front[from], front[to], front_style);
+    draw_projected_line(buf, clip, points[from], points[to], style);
   }
 }
 
